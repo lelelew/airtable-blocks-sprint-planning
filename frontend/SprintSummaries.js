@@ -1,22 +1,21 @@
-import {
-  FieldPickerSynced,
-  initializeBlock,
-  useRecords,
-  expandRecord,
-  TablePickerSynced,
-} from "@airtable/blocks/ui";
+import { useRecords, Button } from "@airtable/blocks/ui";
 import React from "react";
+import dayjs from "dayjs";
+import { rebalance } from "./rebalance";
 
 export function SprintSummaries(props) {
   const {
     table,
+    viewId,
     sprintFieldId,
     complexityFieldId,
     statusFieldId,
     ownersFieldId,
     taskFieldId,
   } = props;
-  const records = useRecords(table);
+
+  const view = table.getViewByIdIfExists(viewId);
+  const records = useRecords(view);
 
   if (
     !records ||
@@ -76,161 +75,159 @@ export function SprintSummaries(props) {
     return accumulator;
   }, {});
 
-  const sprintNames = Object.keys(summaries);
+  // sort sprints by date
+  const sprintNames = Object.keys(summaries).sort((a, b) => {
+    const aDate = new Date(a).getTime();
+    const bDate = new Date(b).getTime();
+    return aDate === bDate ? 0 : aDate - bDate > 0 ? 1 : -1;
+  });
+
+  const rebalanceTasks = async () => {
+    try {
+      await rebalance(
+        table,
+        records,
+        sprintFieldId,
+        complexityFieldId,
+        statusFieldId,
+      );
+    } catch (err) {
+      console.error(`Error attempting to rebalance tasks.`);
+      console.error(err);
+    }
+  };
 
   return (
     <div>
+      <Button onClick={rebalanceTasks}>Rebalance</Button>
       {sprintNames.map((sprintName) => {
         const summary = summaries[sprintName];
         const people = summary.people;
         const personNames = Object.keys(people);
         return (
-          <div key={sprintName}>
-            {/* <pre>{JSON.stringify(summaries, null, 2)}</pre> */}
-            <p
+          <div
+            key={sprintName}
+            style={{
+              margin: "2rem 1rem",
+              border: "1px solid rgba(0,0,0,0.05)",
+              borderRadius: "0.5rem",
+            }}
+          >
+            <div
               style={{
                 padding: "0.5rem",
-                background: "rgba(0,0,0,0.1)",
+                background: "rgba(0,0,0,0.05)",
                 justifyContent: "space-between",
-                fontWeight: "bold",
-                fontSize: "1.5rem",
                 textAlign: "center",
               }}
             >
-              Sprint: {sprintName}
-            </p>
-            <p
+              <span
+                style={{
+                  fontSize: "2rem",
+                }}
+              >
+                {dayjs(sprintName).format("MMMM DD")}
+              </span>
+              <div
+                style={{
+                  marginTop: "1rem",
+                  display: "flex",
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "flex-start",
+                }}
+              >
+                <div
+                  style={{
+                    flexGrow: 1,
+                    height: "1.5rem",
+                    background: "rgba(255, 255, 255 , 1)",
+                    margin: "0 0.5rem",
+                  }}
+                >
+                  <div
+                    style={{
+                      flexGrow: 1,
+                      height: "1.5rem",
+                      background: "rgb(209,247,196)",
+                      width: `${
+                        (summary.completed / summary.complexity) * 100
+                      }%`,
+                      color: "#000",
+                      fontWeight: 500,
+                      padding: "6px 0px",
+                      fontSize: "0.75rem",
+                      lineHeight: "0.75rem",
+                      textAlign: "left",
+                    }}
+                  >
+                    <span
+                      style={{
+                        paddingLeft: "10px",
+                      }}
+                    >
+                      {`${Math.round(
+                        (summary.completed / summary.complexity) * 100,
+                      )}%`}
+                    </span>
+                  </div>
+                </div>
+                {/* <span>{summary.tasks} Stories</span> */}
+              </div>
+            </div>
+            <div
               style={{
-                padding: "0.5rem",
+                margin: "1rem",
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr 1fr 1fr",
+                gridTemplateRows: "auto",
               }}
             >
-              Tasks: {summary.tasks} Completed: {summary.completed} Complexity:{" "}
-              {summary.complexity}
-            </p>
+              <strong>Person</strong>
+              <strong># Stories</strong>
+              <strong># Completed</strong>
+              <strong>Complexity</strong>
+            </div>
             {personNames.map((personName) => {
               const person = people[personName];
               return (
                 <div
                   key={personName}
                   style={{
-                    padding: "1rem",
+                    margin: "0 1rem",
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr 1fr 1fr",
+                    gridTemplateRows: "auto",
                   }}
                 >
-                  <p
-                    style={{
-                      padding: "0.5rem",
-                      background: "rgba(0,0,0,0.2)",
-                    }}
-                  >
-                    {personName}
-                  </p>
-                  <p
-                    style={{
-                      padding: "0.5rem",
-                    }}
-                  >
-                    Tasks: {person.tasks} Completed: {person.completed}{" "}
-                    Complexity: {person.complexity}
-                  </p>
+                  <span>
+                    {personName.split(" ")[0].charAt(0)}
+                    {personName.split(" ")[1].charAt(0)}
+                  </span>
+                  <span>{person.tasks}</span>
+                  <span>{person.completed}</span>
+                  <span>{person.complexity}</span>
                 </div>
               );
             })}
+            <div
+              style={{
+                borderTop: "1px solid rgba(0,0,0,0.2)",
+                margin: "0.5rem 1rem",
+                paddingTop: "0.25rem",
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr 1fr 1fr",
+                gridTemplateRows: "auto",
+              }}
+            >
+              <em>Total</em>
+              <em>{summary.tasks}</em>
+              <em>{summary.completed}</em>
+              <em>{summary.complexity}</em>
+            </div>
           </div>
         );
       })}
     </div>
   );
-
-  // const summarizedRecordsHTML = <pre>{JSON.stringify(summaries, null, 2)}</pre>;
-
-  // const iterate = (obj) => {
-  //   Object.keys(obj).forEach((key) => {
-  //     console.log(`key: ${key}, value: ${obj[key]}`);
-  //     if (typeof obj[key] === "object") {
-  //       iterate(obj[key]);
-  //     }
-  //   });
-  // };
-
-  // iterate(summaries);
-
-  // let summaryArray = [];
-  // Object.keys(summarizedRecords).forEach(function (key) {
-  //   summaryArray.push(summarizedRecords[key]);
-  // });
-
-  // console.log(summaryArray);
-  // return (
-  //   <ul>
-  //     {summaryArray.map((item) => (
-  //       <div key={item.index} label={item.label} value={item.value} />
-  //     ))}
-  //   </ul>
-  // );
-
-  // const summary = summarizedRecords.map((record, index) => {
-  //   return (
-  //     <div>
-  //       <table>
-  //         <thead>
-  //           <tr>
-  //             <td key={index}>Sprint</td>
-  //           </tr>
-  //         </thead>
-  //         <tbody></tbody>
-  //       </table>
-  //     </div>
-  //   );
-  // });
-
-  // {
-  //   "9/19": {
-  //     tasks: 30,
-  //     completed: 90,
-  //     points: 100
-  //   },
-  //   "9/28": {
-  //     tasks: 30,
-  //     completed: 90,
-  //     points: 100
-  //   }
-  // }
-
-  // return (
-  //   <div>
-  //     {summarizedRecords}
-  //     <table>
-  //       <thead>
-  //         <tr>
-  //           <td>Sprint</td>
-  //           <td>Tasks</td>
-  //           <td>Points</td>
-  //           <td>Completed</td>
-  //         </tr>
-  //       </thead>
-  //       <tbody>
-  //         <tr>
-  //           {/* <td>{summaries}</td> */}
-
-  //           <td>{"9/19"}</td>
-  //           <td>{30}</td>
-  //           <td>{90}</td>
-  //           <td>{90}</td>
-  //         </tr>
-  //         <tr>
-  //           <td>{"9/28"}</td>
-  //           <td>{30}</td>
-  //           <td>{90}</td>
-  //           <td>{90}</td>
-  //         </tr>
-  //         <tr>
-  //           <td>{"10/6"}</td>
-  //           <td>{30}</td>
-  //           <td>{90}</td>
-  //           <td>{90}</td>
-  //         </tr>
-  //       </tbody>
-  //     </table>
-  //   </div>
-  // );
 }
